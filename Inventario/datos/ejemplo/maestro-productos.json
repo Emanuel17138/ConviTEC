@@ -1,0 +1,8 @@
+{
+  "productos": [
+    { "productoId": "ARR", "nombre": "Arroz", "descripcion": "Arroz blanco 2 kg", "categoria": "Despensa", "precioUnitarioCentimos": 90000 },
+    { "productoId": "CAF", "nombre": "Café", "descripcion": "Café molido 500 g", "categoria": "Bebidas", "precioUnitarioCentimos": 150000 },
+    { "productoId": "FRI", "nombre": "Frijoles", "descripcion": "Frijoles negros 1 kg", "categoria": "Despensa", "precioUnitarioCentimos": 120000 },
+    { "productoId": "SAL", "nombre": "Sal", "descripcion": "Sal marina 1 kg", "categoria": "Despensa", "precioUnitarioCentimos": 50000 }
+  ]
+}

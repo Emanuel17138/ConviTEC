@@ -1,0 +1,8 @@
+{
+  "sedeId": "LIB",
+  "existencias": [
+    { "productoId": "CAF", "existencia": 5 },
+    { "productoId": "SAL", "existencia": 0 },
+    { "productoId": "ARR", "existencia": 12 }
+  ]
+}
