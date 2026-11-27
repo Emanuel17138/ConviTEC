@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <!-- Sin usings implícitos: evita System.Linq y colecciones nativas por accidente (RNF06, RNF09). -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ConviTEC.Inventario</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ConviTEC.Inventario.Tests" />
+  </ItemGroup>
+
+</Project>

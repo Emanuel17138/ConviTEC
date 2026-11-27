@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ConviTEC.Inventario/ConviTEC.Inventario.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ConviTEC.Inventario.Tests/ConviTEC.Inventario.Tests.csproj" />
+  </Folder>
+</Solution>
