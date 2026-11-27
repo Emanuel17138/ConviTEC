@@ -3,7 +3,6 @@ using System.IO;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using ConviTEC.Inventario.Dominio;
 
 namespace ConviTEC.Inventario.Persistencia;
 
@@ -19,11 +18,19 @@ public sealed class RepositorioInventario
     };
 
     private readonly RutasArchivosInventario _rutas;
+    private readonly Action<EtapaGuardado>? _alCompletarEtapa;
 
-    public RepositorioInventario(RutasArchivosInventario rutas)
+    public RepositorioInventario(RutasArchivosInventario rutas) : this(rutas, null)
+    {
+    }
+
+    /// Solo para pruebas: <paramref name="alCompletarEtapa"/> se invoca al terminar cada etapa del guardado y,
+    /// si lanza, simula un corte del proceso en ese punto (el archivo temporal no se limpia).
+    internal RepositorioInventario(RutasArchivosInventario rutas, Action<EtapaGuardado>? alCompletarEtapa)
     {
         ArgumentNullException.ThrowIfNull(rutas, nameof(rutas));
         _rutas = rutas;
+        _alCompletarEtapa = alCompletarEtapa;
     }
 
     public bool ExisteEstadoGuardado() => File.Exists(_rutas.EstadoInventario);
@@ -35,37 +42,11 @@ public sealed class RepositorioInventario
     public EstadoInventarioDto LeerEstado() => Leer<EstadoInventarioDto>(_rutas.EstadoInventario);
 
     /// Guarda el snapshot completo de forma atómica: escribe un archivo temporal, lo fuerza a disco
-    /// y lo renombra sobre el definitivo. Un corte a mitad de escritura deja intacto el estado anterior.
-    public void GuardarEstado(string sedeId, StockLocal[] stock)
+    /// y lo renombra sobre el definitivo. Un corte antes del reemplazo deja el snapshot anterior completo;
+    /// un corte después deja el nuevo completo. Nunca queda un archivo a medias.
+    public void GuardarEstado(EstadoInventarioDto estado)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(sedeId, nameof(sedeId));
-        ArgumentNullException.ThrowIfNull(stock, nameof(stock));
-
-        StockGuardadoDto[] entradas = new StockGuardadoDto[stock.Length];
-        for (int i = 0; i < stock.Length; i++)
-        {
-            Producto producto = stock[i].Producto;
-            entradas[i] = new StockGuardadoDto
-            {
-                Producto = new ProductoDto
-                {
-                    ProductoId = producto.ProductoId,
-                    Nombre = producto.Nombre,
-                    Descripcion = producto.Descripcion,
-                    Categoria = producto.Categoria,
-                    PrecioUnitarioCentimos = producto.PrecioUnitarioCentimos,
-                },
-                Existencia = stock[i].Existencia,
-                Reservada = stock[i].Reservada,
-            };
-        }
-
-        EstadoInventarioDto estado = new EstadoInventarioDto
-        {
-            Version = EstadoInventarioDto.VersionActual,
-            SedeId = sedeId,
-            Stock = entradas,
-        };
+        ArgumentNullException.ThrowIfNull(estado, nameof(estado));
 
         byte[] contenido = new UTF8Encoding(false).GetBytes(JsonSerializer.Serialize(estado, Opciones));
         string destino = _rutas.EstadoInventario;
@@ -84,7 +65,9 @@ public sealed class RepositorioInventario
                 archivo.Write(contenido, 0, contenido.Length);
                 archivo.Flush(true);
             }
+            _alCompletarEtapa?.Invoke(EtapaGuardado.TemporalEscrito);
             File.Move(temporal, destino, overwrite: true);
+            _alCompletarEtapa?.Invoke(EtapaGuardado.Reemplazado);
         }
         catch (Exception e) when (e is IOException || e is UnauthorizedAccessException)
         {

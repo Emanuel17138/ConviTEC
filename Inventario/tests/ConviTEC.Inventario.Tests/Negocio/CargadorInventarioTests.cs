@@ -361,6 +361,164 @@ public class CargadorInventarioTests
         Assert.Throws<DatosInventarioInvalidosException>(() => Cargar(dir));
     }
 
+    // ---- RF02: revisión y secciones nuevas del snapshot ----
+
+    private static string EstadoConSecciones(string seccionesJson) =>
+        "{\"version\":1,\"sedeId\":\"LIB\",\"stock\":[" + EntradaCafe(4, 1) + "]," + seccionesJson + "}";
+
+    private const string Resultado =
+        "{\"pedidoId\":\"p-1\",\"operacion\":\"stock.reservar\",\"estadoReserva\":\"RESERVADA\",\"codigo\":\"OK\",\"mensaje\":\"ok\"}";
+
+    private static DatosInventarioInvalidosException RecuperarFallido(string seccionesJson)
+    {
+        using DirectorioTemporal dir = new DirectorioTemporal();
+        dir.Escribir(RutasArchivosInventario.NombreEstado, EstadoConSecciones(seccionesJson));
+        return Assert.Throws<DatosInventarioInvalidosException>(() => Cargar(dir));
+    }
+
+    [Fact]
+    public void Recuperacion_SnapshotDeRf01SinCamposNuevos_RevisionCeroYSeccionesVacias()
+    {
+        using DirectorioTemporal dir = new DirectorioTemporal();
+        dir.Escribir(RutasArchivosInventario.NombreEstado, Estado("LIB", "[" + EntradaCafe(4, 1) + "]"));
+
+        InventarioLocal inventario = Cargar(dir).Inventario;
+
+        Assert.True(inventario.BuscarRevision("CAF", out long revision));
+        Assert.Equal(0, revision);
+        Assert.Empty(inventario.ConsultarSalidasPendientes());
+        Assert.False(inventario.BuscarLote("p-1", out _));
+    }
+
+    [Fact]
+    public void Recuperacion_ConservaRevisionYSecciones()
+    {
+        using DirectorioTemporal dir = new DirectorioTemporal();
+        dir.Escribir(RutasArchivosInventario.NombreEstado, "{\"version\":1,\"sedeId\":\"LIB\",\"stock\":[" +
+            EntradaCafe(4, 1).Replace("\"reservada\":1", "\"reservada\":1,\"revision\":9") + "]," +
+            "\"lotes\":[{\"pedidoId\":\"p-1\",\"coordinadoraSedeId\":\"SJ\",\"estado\":\"RESERVADA\"," +
+            "\"lineas\":[{\"productoId\":\"CAF\",\"cantidad\":1,\"precioUnitarioCentimos\":150000}]}]," +
+            "\"comandos\":[{\"mensajeId\":\"m-1\",\"tipo\":\"stock.reservar\",\"origenSedeId\":\"SJ\",\"contenido\":\"c\",\"resultado\":" + Resultado + "}]," +
+            "\"reposiciones\":[{\"operacionId\":\"op-1\",\"productoId\":\"CAF\",\"cantidad\":3,\"existencia\":4,\"reservada\":1}]," +
+            "\"salidasPendientes\":[{\"mensajeId\":\"s-1\",\"destinoSedeId\":\"SJ\",\"productoId\":\"CAF\",\"disponible\":3,\"revision\":9}]}");
+
+        InventarioLocal inventario = Cargar(dir).Inventario;
+
+        Assert.True(inventario.BuscarRevision("CAF", out long revision));
+        Assert.Equal(9, revision);
+        Assert.True(inventario.BuscarLote("p-1", out LoteReserva? lote));
+        Assert.Equal(EstadoReserva.Reservada, lote.Estado);
+        Assert.True(inventario.BuscarComando("m-1", out ComandoRegistrado? comando));
+        Assert.Equal("ok", comando.Resultado.Mensaje);
+        Assert.True(inventario.BuscarReposicion("op-1", out ReposicionRegistrada? reposicion));
+        Assert.Equal(3, reposicion.Disponible);
+        Assert.Equal(9L, Assert.Single(inventario.ConsultarSalidasPendientes()).Revision);
+    }
+
+    [Fact]
+    public void Recuperacion_RevisionNegativa_Falla()
+    {
+        using DirectorioTemporal dir = new DirectorioTemporal();
+        dir.Escribir(RutasArchivosInventario.NombreEstado, Estado("LIB",
+            "[" + EntradaCafe(4, 1).Replace("\"reservada\":1", "\"reservada\":1,\"revision\":-1") + "]"));
+
+        DatosInventarioInvalidosException error = Assert.Throws<DatosInventarioInvalidosException>(() => Cargar(dir));
+
+        Assert.Contains("revisión", error.Detalle);
+    }
+
+    [Fact]
+    public void Recuperacion_LoteDuplicado_Falla()
+    {
+        const string lote = "{\"pedidoId\":\"p-1\",\"coordinadoraSedeId\":\"SJ\",\"estado\":\"LIBERADA\",\"lineas\":[]}";
+
+        DatosInventarioInvalidosException error = RecuperarFallido("\"lotes\":[" + lote + "," + lote + "]");
+
+        Assert.Contains("lotes[1]", error.Detalle);
+        Assert.Contains("duplicado", error.Detalle);
+    }
+
+    [Theory]
+    [InlineData("\"estado\":\"INEXISTENTE\",\"lineas\":[]")]
+    [InlineData("\"estado\":\"reservada\",\"lineas\":[]")]
+    [InlineData("\"estado\":\"RESERVADA\",\"lineas\":[]")]
+    [InlineData("\"estado\":\"RESERVADA\",\"lineas\":[{\"productoId\":\"XYZ\",\"cantidad\":1,\"precioUnitarioCentimos\":1}]")]
+    [InlineData("\"estado\":\"CONFIRMADA\",\"lineas\":[{\"productoId\":\"CAF\",\"cantidad\":0,\"precioUnitarioCentimos\":1}]")]
+    [InlineData("\"estado\":\"RESERVADA\",\"lineas\":[{\"productoId\":\"CAF\",\"cantidad\":1,\"precioUnitarioCentimos\":1},{\"productoId\":\"CAF\",\"cantidad\":2,\"precioUnitarioCentimos\":1}]")]
+    [InlineData("\"estado\":\"RESERVADA\"")]
+    public void Recuperacion_LoteInvalido_Falla(string estadoYLineas)
+    {
+        DatosInventarioInvalidosException error = RecuperarFallido(
+            "\"lotes\":[{\"pedidoId\":\"p-1\",\"coordinadoraSedeId\":\"SJ\"," + estadoYLineas + "}]");
+
+        Assert.Contains("lotes[0]", error.Detalle);
+    }
+
+    [Fact]
+    public void Recuperacion_LoteRechazadoPuedeTenerLineasDeProductoAjeno()
+    {
+        using DirectorioTemporal dir = new DirectorioTemporal();
+        dir.Escribir(RutasArchivosInventario.NombreEstado, EstadoConSecciones(
+            "\"lotes\":[{\"pedidoId\":\"p-1\",\"coordinadoraSedeId\":\"SJ\",\"estado\":\"RECHAZADA\"," +
+            "\"lineas\":[{\"productoId\":\"XYZ\",\"cantidad\":1,\"precioUnitarioCentimos\":1}]}]"));
+
+        Assert.True(Cargar(dir).Inventario.BuscarLote("p-1", out LoteReserva? lote));
+        Assert.Equal(EstadoReserva.Rechazada, lote.Estado);
+    }
+
+    [Fact]
+    public void Recuperacion_ComandoDuplicadoOSinResultado_Falla()
+    {
+        const string comando = "{\"mensajeId\":\"m-1\",\"tipo\":\"stock.reservar\",\"origenSedeId\":\"SJ\",\"contenido\":\"c\",\"resultado\":" + Resultado + "}";
+
+        Assert.Contains("comandos[1]", RecuperarFallido("\"comandos\":[" + comando + "," + comando + "]").Detalle);
+        Assert.Contains("resultado", RecuperarFallido(
+            "\"comandos\":[{\"mensajeId\":\"m-1\",\"tipo\":\"t\",\"origenSedeId\":\"SJ\",\"contenido\":\"c\"}]").Detalle);
+    }
+
+    [Fact]
+    public void Recuperacion_ReposicionDuplicadaOConProductoAjeno_Falla()
+    {
+        const string reposicion = "{\"operacionId\":\"op-1\",\"productoId\":\"CAF\",\"cantidad\":3,\"existencia\":4,\"reservada\":1}";
+
+        Assert.Contains("duplicado", RecuperarFallido("\"reposiciones\":[" + reposicion + "," + reposicion + "]").Detalle);
+        Assert.Contains("XYZ", RecuperarFallido(
+            "\"reposiciones\":[{\"operacionId\":\"op-1\",\"productoId\":\"XYZ\",\"cantidad\":3,\"existencia\":4,\"reservada\":1}]").Detalle);
+        Assert.Contains("reposiciones[0]", RecuperarFallido(
+            "\"reposiciones\":[{\"operacionId\":\"op-1\",\"productoId\":\"CAF\",\"cantidad\":0,\"existencia\":4,\"reservada\":1}]").Detalle);
+    }
+
+    [Fact]
+    public void Recuperacion_SalidaDuplicadaHaciaLaPropiaSedeOConProductoAjeno_Falla()
+    {
+        const string salida = "{\"mensajeId\":\"s-1\",\"destinoSedeId\":\"SJ\",\"productoId\":\"CAF\",\"disponible\":3,\"revision\":1}";
+
+        Assert.Contains("salidasPendientes[1]", RecuperarFallido("\"salidasPendientes\":[" + salida + "," + salida + "]").Detalle);
+        Assert.Contains("a sí misma", RecuperarFallido(
+            "\"salidasPendientes\":[" + salida.Replace("\"SJ\"", "\"LIB\"") + "]").Detalle);
+        Assert.Contains("XYZ", RecuperarFallido(
+            "\"salidasPendientes\":[" + salida.Replace("\"CAF\"", "\"XYZ\"") + "]").Detalle);
+    }
+
+    [Fact]
+    public void Recuperacion_ElementoNuloEnSeccionNueva_Falla()
+    {
+        Assert.Contains("lotes[0]", RecuperarFallido("\"lotes\":[null]").Detalle);
+        Assert.Contains("comandos[0]", RecuperarFallido("\"comandos\":[null]").Detalle);
+        Assert.Contains("reposiciones[0]", RecuperarFallido("\"reposiciones\":[null]").Detalle);
+        Assert.Contains("salidasPendientes[0]", RecuperarFallido("\"salidasPendientes\":[null]").Detalle);
+    }
+
+    [Fact]
+    public void Cargar_SedesRemotasInvalidas_Lanza()
+    {
+        using DirectorioTemporal dir = new DirectorioTemporal();
+        dir.Escribir(RutasArchivosInventario.NombreEstado, Estado("LIB", "[]"));
+
+        Assert.Throws<System.ArgumentException>(() => new CargadorInventario().Cargar(dir.Rutas("LIB"), new[] { "LIB" }));
+        Assert.Throws<System.ArgumentNullException>(() => new CargadorInventario().Cargar(dir.Rutas("LIB"), null!));
+    }
+
     [Fact]
     public void Cargar_RutasNulas_Lanza()
     {
