@@ -51,6 +51,53 @@ public class ConfiguracionSedeTests
     }
 
     [Fact]
+    public void Leer_SinRemotas_ListaVacia()
+    {
+        ConfiguracionSede configuracion = ConfiguracionSede.Leer(new[] { "--sede", "LIB", "--datos", "d" });
+
+        Assert.Empty(configuracion.SedesRemotas);
+    }
+
+    [Fact]
+    public void Leer_ConRemotas_LasSeparaPorComasYRecortaEspacios()
+    {
+        ConfiguracionSede configuracion = ConfiguracionSede.Leer(
+            new[] { "--sede", "LIB", "--datos", "d", "--remotas", "SJ, ALA ,LIM" });
+
+        Assert.Equal(new[] { "SJ", "ALA", "LIM" }, configuracion.SedesRemotas);
+    }
+
+    [Fact]
+    public void Leer_RemotasVacias_ListaVacia()
+    {
+        ConfiguracionSede configuracion = ConfiguracionSede.Leer(
+            new[] { "--sede", "LIB", "--datos", "d", "--remotas", "  " });
+
+        Assert.Empty(configuracion.SedesRemotas);
+    }
+
+    [Theory]
+    [InlineData("SJ,SJ")]
+    [InlineData("SJ,,ALA")]
+    [InlineData("LIB,SJ")]
+    public void Leer_RemotasRepetidasVaciasOIgualesALaPropia_Fallan(string remotas)
+    {
+        ArgumentException error = Assert.Throws<ArgumentException>(
+            () => ConfiguracionSede.Leer(new[] { "--sede", "LIB", "--datos", "d", "--remotas", remotas }));
+
+        Assert.Contains("remota", error.Message);
+    }
+
+    [Fact]
+    public void Leer_RemotasDistinguenMayusculas()
+    {
+        ConfiguracionSede configuracion = ConfiguracionSede.Leer(
+            new[] { "--sede", "LIB", "--datos", "d", "--remotas", "Lib,LIB2" });
+
+        Assert.Equal(new[] { "Lib", "LIB2" }, configuracion.SedesRemotas);
+    }
+
+    [Fact]
     public void Leer_OpcionSinValorFinal_SeIgnoraYFalta()
     {
         Assert.Throws<ArgumentException>(() => ConfiguracionSede.Leer(new[] { "--datos", "d", "--sede" }));

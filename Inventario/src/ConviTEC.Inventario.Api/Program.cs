@@ -19,7 +19,8 @@ try
 {
     // Valida todo antes de instalar el estado: si algo falla la sede no abre el puerto.
     arranque = new CargadorInventario().Cargar(
-        RutasArchivosInventario.EnDirectorio(configuracion.DirectorioDatos, configuracion.SedeId));
+        RutasArchivosInventario.EnDirectorio(configuracion.DirectorioDatos, configuracion.SedeId),
+        configuracion.SedesRemotas);
 }
 catch (DatosInventarioInvalidosException e)
 {
