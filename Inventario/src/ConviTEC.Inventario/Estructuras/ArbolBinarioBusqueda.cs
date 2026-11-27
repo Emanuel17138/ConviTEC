@@ -136,6 +136,24 @@ public sealed class ArbolBinarioBusqueda<TClave, TValor> : IIndiceOrdenado<TClav
 
     public bool Contiene(TClave clave) => Buscar(clave, out _);
 
+    public bool Reemplazar(TClave clave, TValor valor)
+    {
+        ArgumentNullException.ThrowIfNull(clave, nameof(clave));
+
+        Nodo? actual = _raiz;
+        while (actual != null)
+        {
+            int comparacion = _comparador.Compare(clave, actual.Clave);
+            if (comparacion == 0)
+            {
+                actual.Valor = valor;
+                return true;
+            }
+            actual = comparacion < 0 ? actual.Izquierdo : actual.Derecho;
+        }
+        return false;
+    }
+
     public TClave[] ClavesEnOrden()
     {
         Nodo[] nodos = NodosEnOrden();

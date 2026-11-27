@@ -20,6 +20,10 @@ public interface IIndiceOrdenado<TClave, TValor>
 
     bool Contiene(TClave clave);
 
+    /// Sustituye el valor de una clave que ya existe, sin cambiar la forma del árbol.
+    /// Devuelve false y no modifica nada si la clave no existe. Lanza <see cref="System.ArgumentNullException"/> si es nula.
+    bool Reemplazar(TClave clave, TValor valor);
+
     ///Claves en orden ascendente. Arreglo de longitud 0 si el índice está vacío.
     TClave[] ClavesEnOrden();
 
