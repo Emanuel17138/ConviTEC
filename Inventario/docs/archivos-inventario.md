@@ -35,4 +35,4 @@ Todo se construye en estructuras locales y `InventarioLocal` se crea solo al fin
 
 ## Consulta local reutilizable
 
-`InventarioLocal` ofrece `ConsultarInventario()` (todo el stock por `productoId` ascendente, agotados incluidos, `[]` si no hay productos), `BuscarStock(productoId, out stock)`, `Contiene` y `Cantidad`. RF02 reutiliza esta misma instancia; el endpoint HTTP de `rf01-consulta` la proyecta a JSON.
+`InventarioLocal` ofrece `ConsultarInventario()` (todo el stock por `productoId` ascendente, agotados incluidos, `[]` si no hay productos), `BuscarStock(productoId, out stock)`, `Contiene` y `Cantidad`. RF02 reutiliza esta misma instancia; el endpoint HTTP la proyecta a JSON (ver [consulta-http.md](consulta-http.md)).

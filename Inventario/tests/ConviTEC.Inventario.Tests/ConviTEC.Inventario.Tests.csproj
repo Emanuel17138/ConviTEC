@@ -16,6 +16,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ConviTEC.Inventario\ConviTEC.Inventario.csproj" />
+    <ProjectReference Include="..\..\src\ConviTEC.Inventario.Api\ConviTEC.Inventario.Api.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Kestrel y HttpClient reales para probar el endpoint desde HTTP. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
   <ItemGroup>
