@@ -96,6 +96,46 @@ public abstract class IndiceOrdenadoContratoTests
     }
 
     [Fact]
+    public void Reemplazar_ClaveExistente_CambiaElValorSinAlterarClavesNiCantidad()
+    {
+        IIndiceOrdenado<string, int> indice = CrearIndice();
+        InsertarTodos(indice, "CAF", "ARR", "SAL");
+        int alturaAntes = indice.Altura;
+
+        bool reemplazado = indice.Reemplazar("CAF", 99);
+
+        Assert.True(reemplazado);
+        Assert.True(indice.Buscar("CAF", out int valor));
+        Assert.Equal(99, valor);
+        Assert.Equal(3, indice.Cantidad);
+        Assert.Equal(alturaAntes, indice.Altura);
+        Assert.Equal(new[] { "ARR", "CAF", "SAL" }, indice.ClavesEnOrden());
+    }
+
+    [Fact]
+    public void Reemplazar_ClaveInexistenteOIndiceVacio_DevuelveFalseYNoInserta()
+    {
+        IIndiceOrdenado<string, int> indice = CrearIndice();
+
+        Assert.False(indice.Reemplazar("CAF", 1));
+        Assert.True(indice.EstaVacio);
+
+        InsertarTodos(indice, "CAF", "ARR");
+        Assert.False(indice.Reemplazar("caf", 1)); // distingue mayúsculas
+        Assert.False(indice.Reemplazar("XYZ", 1));
+        Assert.Equal(2, indice.Cantidad);
+        Assert.False(indice.Contiene("XYZ"));
+    }
+
+    [Fact]
+    public void Reemplazar_ClaveNula_Lanza()
+    {
+        IIndiceOrdenado<string, int> indice = CrearIndice();
+
+        Assert.Throws<ArgumentNullException>(() => indice.Reemplazar(null!, 1));
+    }
+
+    [Fact]
     public void ArbolUnaSolaClave_TieneAlturaUno()
     {
         IIndiceOrdenado<string, int> indice = CrearIndice();

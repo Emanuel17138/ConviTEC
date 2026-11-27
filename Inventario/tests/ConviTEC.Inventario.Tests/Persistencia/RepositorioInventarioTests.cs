@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using ConviTEC.Inventario.Dominio;
 using ConviTEC.Inventario.Persistencia;
@@ -10,13 +10,51 @@ public class RepositorioInventarioTests
     private static StockLocal Stock(string id, int existencia, int reservada, long precio = 150000) =>
         new StockLocal(new Producto(id, "Café ñandú", "Descripción con \"comillas\"", "Bebidas", precio), existencia, reservada);
 
+    private static void Guardar(RepositorioInventario repositorio, params StockLocal[] stocks)
+    {
+        EntradaStock[] entradas = new EntradaStock[stocks.Length];
+        for (int i = 0; i < stocks.Length; i++)
+        {
+            entradas[i] = new EntradaStock(stocks[i], 0);
+        }
+        repositorio.GuardarEstado(ConversionEstado.Construir("LIB", entradas));
+    }
+
+    [Fact]
+    public void GuardarYLeer_TodasLasSeccionesDelSnapshot()
+    {
+        using DirectorioTemporal dir = new DirectorioTemporal();
+        RepositorioInventario repositorio = new RepositorioInventario(dir.Rutas("LIB"));
+        ResultadoStock resultado = new ResultadoStock("p-1", "stock.reservar", EstadoReserva.Reservada, CodigosResultado.Ok, "Reservado: café ñandú");
+
+        repositorio.GuardarEstado(ConversionEstado.Construir("LIB",
+            new[] { new EntradaStock(Stock("CAF", 5, 2), 7) },
+            new[] { new LoteReserva("p-1", "SJ", EstadoReserva.Reservada, new[] { new LineaReserva("CAF", 2, 150000) }) },
+            new[] { new ComandoRegistrado("m-1", "stock.reservar", "SJ", "contenido", resultado) },
+            new[] { new ReposicionRegistrada("op-1", "CAF", 3, 5, 2) },
+            new[] { new SalidaPendiente("s-1", "SJ", "CAF", 3, 7) }));
+        EstadoInventarioDto estado = repositorio.LeerEstado();
+
+        Assert.Equal(7L, Assert.Single(estado.Stock!)!.Revision);
+        LoteGuardadoDto lote = Assert.Single(estado.Lotes!)!;
+        Assert.Equal("RESERVADA", lote.Estado);
+        Assert.Equal(2, Assert.Single(lote.Lineas!)!.Cantidad);
+        ComandoGuardadoDto comando = Assert.Single(estado.Comandos!)!;
+        Assert.Equal("Reservado: café ñandú", comando.Resultado!.Mensaje);
+        Assert.Equal("op-1", Assert.Single(estado.Reposiciones!)!.OperacionId);
+        SalidaPendienteGuardadaDto salida = Assert.Single(estado.SalidasPendientes!)!;
+        Assert.Equal("SJ", salida.DestinoSedeId);
+        Assert.Equal(7L, salida.Revision);
+        Assert.Contains("\"salidasPendientes\"", dir.Leer(RutasArchivosInventario.NombreEstado));
+    }
+
     [Fact]
     public void GuardarYLeer_ConservaCantidadesPrecioYTextoUtf8()
     {
         using DirectorioTemporal dir = new DirectorioTemporal();
         RepositorioInventario repositorio = new RepositorioInventario(dir.Rutas("LIB"));
 
-        repositorio.GuardarEstado("LIB", new[] { Stock("CAF", 4, 1) });
+        Guardar(repositorio, new[] { Stock("CAF", 4, 1) });
         EstadoInventarioDto estado = repositorio.LeerEstado();
 
         Assert.Equal(EstadoInventarioDto.VersionActual, estado.Version);
@@ -35,7 +73,7 @@ public class RepositorioInventarioTests
         using DirectorioTemporal dir = new DirectorioTemporal();
         RepositorioInventario repositorio = new RepositorioInventario(dir.Rutas("LIB"));
 
-        repositorio.GuardarEstado("LIB", new[] { Stock("CAF", 4, 1) });
+        Guardar(repositorio, new[] { Stock("CAF", 4, 1) });
 
         string json = dir.Leer(RutasArchivosInventario.NombreEstado);
         Assert.Contains("\"productoId\"", json);
@@ -50,8 +88,8 @@ public class RepositorioInventarioTests
         using DirectorioTemporal dir = new DirectorioTemporal();
         RepositorioInventario repositorio = new RepositorioInventario(dir.Rutas("LIB"));
 
-        repositorio.GuardarEstado("LIB", new[] { Stock("CAF", 4, 1) });
-        repositorio.GuardarEstado("LIB", new[] { Stock("CAF", 9, 0), Stock("ARR", 2, 0) });
+        Guardar(repositorio, new[] { Stock("CAF", 4, 1) });
+        Guardar(repositorio, new[] { Stock("CAF", 9, 0), Stock("ARR", 2, 0) });
 
         EstadoInventarioDto estado = repositorio.LeerEstado();
         Assert.Equal(2, estado.Stock!.Length);
@@ -63,7 +101,7 @@ public class RepositorioInventarioTests
         using DirectorioTemporal dir = new DirectorioTemporal();
         RepositorioInventario repositorio = new RepositorioInventario(dir.Rutas("LIB"));
 
-        repositorio.GuardarEstado("LIB", Array.Empty<StockLocal>());
+        Guardar(repositorio, Array.Empty<StockLocal>());
 
         Assert.Empty(repositorio.LeerEstado().Stock!);
     }
@@ -75,7 +113,7 @@ public class RepositorioInventarioTests
         string subdirectorio = Path.Combine(dir.Ruta, "sede-nueva");
         RepositorioInventario repositorio = new RepositorioInventario(RutasArchivosInventario.EnDirectorio(subdirectorio, "LIB"));
 
-        repositorio.GuardarEstado("LIB", new[] { Stock("CAF", 1, 0) });
+        Guardar(repositorio, new[] { Stock("CAF", 1, 0) });
 
         Assert.True(repositorio.ExisteEstadoGuardado());
     }
@@ -131,7 +169,7 @@ public class RepositorioInventarioTests
         RepositorioInventario repositorio = new RepositorioInventario(
             RutasArchivosInventario.EnDirectorio(Path.Combine(bloqueo, "sede"), "LIB"));
 
-        Assert.Throws<DatosInventarioInvalidosException>(() => repositorio.GuardarEstado("LIB", new[] { Stock("CAF", 1, 0) }));
+        Assert.Throws<DatosInventarioInvalidosException>(() => Guardar(repositorio, new[] { Stock("CAF", 1, 0) }));
     }
 
     [Fact]

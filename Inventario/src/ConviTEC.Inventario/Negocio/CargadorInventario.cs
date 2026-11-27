@@ -9,28 +9,39 @@ namespace ConviTEC.Inventario.Negocio;
 /// Si no, lee el maestro y las existencias iniciales y guarda el primer snapshot.
 public sealed class CargadorInventario
 {
-    public ResultadoArranque Cargar(RutasArchivosInventario rutas)
+    public ResultadoArranque Cargar(RutasArchivosInventario rutas) => Cargar(rutas, Array.Empty<string>());
+
+    /// <paramref name="sedesRemotas"/>: las otras sedes, destino de las publicaciones de cambios de catálogo.
+    public ResultadoArranque Cargar(RutasArchivosInventario rutas, string[] sedesRemotas)
     {
         ArgumentNullException.ThrowIfNull(rutas, nameof(rutas));
+        ArgumentNullException.ThrowIfNull(sedesRemotas, nameof(sedesRemotas));
 
-        RepositorioInventario repositorio = new RepositorioInventario(rutas);
-        return repositorio.ExisteEstadoGuardado()
-            ? Recuperar(rutas, repositorio)
-            : ArrancarPorPrimeraVez(rutas, repositorio);
+        return Cargar(rutas, sedesRemotas, new RepositorioInventario(rutas));
     }
 
-    private static ResultadoArranque ArrancarPorPrimeraVez(RutasArchivosInventario rutas, RepositorioInventario repositorio)
+    /// Permite a las pruebas inyectar un repositorio con puntos de corte.
+    internal ResultadoArranque Cargar(RutasArchivosInventario rutas, string[] sedesRemotas, RepositorioInventario repositorio)
+    {
+        return repositorio.ExisteEstadoGuardado()
+            ? Recuperar(rutas, sedesRemotas, repositorio)
+            : ArrancarPorPrimeraVez(rutas, sedesRemotas, repositorio);
+    }
+
+    private static ResultadoArranque ArrancarPorPrimeraVez(
+        RutasArchivosInventario rutas, string[] sedesRemotas, RepositorioInventario repositorio)
     {
         ArbolAvl<string, Producto> maestro = ConstruirMaestro(repositorio.LeerMaestro(), rutas.MaestroProductos);
-        ArbolAvl<string, StockLocal> indice = ConstruirDesdeExistencias(
-            repositorio.LeerExistenciasIniciales(), maestro, rutas);
+        EstadoInventario estado = new EstadoInventario();
+        CargarDesdeExistencias(repositorio.LeerExistenciasIniciales(), maestro, rutas, estado.Stock);
 
-        InventarioLocal inventario = new InventarioLocal(rutas.SedeId, indice);
-        repositorio.GuardarEstado(rutas.SedeId, inventario.ConsultarInventario());
+        InventarioLocal inventario = new InventarioLocal(rutas.SedeId, estado, repositorio, sedesRemotas);
+        repositorio.GuardarEstado(estado.ADto(rutas.SedeId));
         return new ResultadoArranque(inventario, ModoArranque.Inicial);
     }
 
-    private static ResultadoArranque Recuperar(RutasArchivosInventario rutas, RepositorioInventario repositorio)
+    private static ResultadoArranque Recuperar(
+        RutasArchivosInventario rutas, string[] sedesRemotas, RepositorioInventario repositorio)
     {
         string archivo = rutas.EstadoInventario;
         EstadoInventarioDto estado = repositorio.LeerEstado();
@@ -46,7 +57,7 @@ public sealed class CargadorInventario
             throw new DatosInventarioInvalidosException(archivo, "falta el campo 'stock'.");
         }
 
-        ArbolAvl<string, StockLocal> indice = InventarioLocal.NuevoIndice();
+        EstadoInventario recuperado = new EstadoInventario();
         for (int i = 0; i < estado.Stock.Length; i++)
         {
             string posicion = $"stock[{i}]";
@@ -57,14 +68,21 @@ public sealed class CargadorInventario
             }
 
             Producto producto = ConvertirProducto(entrada.Producto, archivo, posicion + ".producto");
-            int existencia = Obligatorio(entrada.Existencia, "existencia", archivo, posicion);
-            int reservada = Obligatorio(entrada.Reservada, "reservada", archivo, posicion);
+            int existencia = CamposObligatorios.Valor(entrada.Existencia, "existencia", archivo, posicion);
+            int reservada = CamposObligatorios.Valor(entrada.Reservada, "reservada", archivo, posicion);
+            long revision = entrada.Revision ?? 0; // Opcional: un snapshot anterior a RF02 no la trae.
+            if (revision < 0)
+            {
+                throw new DatosInventarioInvalidosException(archivo, $"{posicion}: la revisión no puede ser negativa.");
+            }
 
-            InsertarSinDuplicar(indice, producto.ProductoId,
-                CrearStock(producto, existencia, reservada, archivo, posicion), archivo, posicion);
+            InsertarSinDuplicar(recuperado.Stock, producto.ProductoId,
+                new EntradaStock(CrearStock(producto, existencia, reservada, archivo, posicion), revision), archivo, posicion);
         }
+        ReconstructorEstado.CargarSecciones(estado, recuperado, rutas.SedeId, archivo);
 
-        return new ResultadoArranque(new InventarioLocal(rutas.SedeId, indice), ModoArranque.Recuperacion);
+        return new ResultadoArranque(
+            new InventarioLocal(rutas.SedeId, recuperado, repositorio, sedesRemotas), ModoArranque.Recuperacion);
     }
 
     private static ArbolAvl<string, Producto> ConstruirMaestro(MaestroProductosDto maestro, string archivo)
@@ -88,8 +106,9 @@ public sealed class CargadorInventario
         return indice;
     }
 
-    private static ArbolAvl<string, StockLocal> ConstruirDesdeExistencias(
-        ExistenciasInicialesDto semilla, ArbolAvl<string, Producto> maestro, RutasArchivosInventario rutas)
+    private static void CargarDesdeExistencias(
+        ExistenciasInicialesDto semilla, ArbolAvl<string, Producto> maestro, RutasArchivosInventario rutas,
+        ArbolAvl<string, EntradaStock> indice)
     {
         string archivo = rutas.ExistenciasIniciales;
         ValidarSede(semilla.SedeId, rutas.SedeId, archivo);
@@ -98,7 +117,6 @@ public sealed class CargadorInventario
             throw new DatosInventarioInvalidosException(archivo, "falta el campo 'existencias'.");
         }
 
-        ArbolAvl<string, StockLocal> indice = InventarioLocal.NuevoIndice();
         for (int i = 0; i < semilla.Existencias.Length; i++)
         {
             string posicion = $"existencias[{i}]";
@@ -111,7 +129,7 @@ public sealed class CargadorInventario
             {
                 throw new DatosInventarioInvalidosException(archivo, $"{posicion}: falta 'productoId'.");
             }
-            int existencia = Obligatorio(entrada.Existencia, "existencia", archivo, posicion);
+            int existencia = CamposObligatorios.Valor(entrada.Existencia, "existencia", archivo, posicion);
 
             if (!maestro.Buscar(entrada.ProductoId, out Producto? producto))
             {
@@ -120,9 +138,8 @@ public sealed class CargadorInventario
             }
 
             InsertarSinDuplicar(indice, entrada.ProductoId,
-                CrearStock(producto, existencia, 0, archivo, posicion), archivo, posicion);
+                new EntradaStock(CrearStock(producto, existencia, 0, archivo, posicion), 0), archivo, posicion);
         }
-        return indice;
     }
 
     private static void ValidarSede(string? sedeEnArchivo, string sedeEsperada, string archivo)
@@ -135,21 +152,12 @@ public sealed class CargadorInventario
     }
 
     private static void InsertarSinDuplicar(
-        ArbolAvl<string, StockLocal> indice, string productoId, StockLocal stock, string archivo, string posicion)
+        ArbolAvl<string, EntradaStock> indice, string productoId, EntradaStock entrada, string archivo, string posicion)
     {
-        if (!indice.Insertar(productoId, stock))
+        if (!indice.Insertar(productoId, entrada))
         {
             throw new DatosInventarioInvalidosException(archivo, $"{posicion}: producto duplicado '{productoId}'.");
         }
-    }
-
-    private static int Obligatorio(int? valor, string campo, string archivo, string posicion)
-    {
-        if (valor == null)
-        {
-            throw new DatosInventarioInvalidosException(archivo, $"{posicion}: falta '{campo}'.");
-        }
-        return valor.Value;
     }
 
     private static Producto ConvertirProducto(ProductoDto? dto, string archivo, string posicion)
