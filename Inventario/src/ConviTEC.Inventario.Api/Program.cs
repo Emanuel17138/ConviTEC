@@ -42,5 +42,5 @@ despachador.Registrar(new ManejadorComandosStock(configuracion.SedeId, new Prove
 OpcionesMensajeria mensajeria = new OpcionesMensajeria(
     configuracion.SedeId, configuracion.SedesRemotas, configuracion.RabbitUri, despachador);
 
-ServidorSede.Crear(arranque.Inventario, configuracion.Url, mensajeria).Run();
+ServidorSede.Crear(arranque.Inventario, configuracion.Url, mensajeria, catalogo).Run();
 return 0;

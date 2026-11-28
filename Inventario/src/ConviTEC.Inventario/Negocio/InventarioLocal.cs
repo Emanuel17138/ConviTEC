@@ -56,6 +56,16 @@ public sealed class InventarioLocal
         }
     }
 
+    /// Stock con su revisión por productoId ascendente, agotados incluidos: la oferta propia que la vista global
+    /// del catálogo (RF03) combina con la réplica. Arreglo vacío si no hay productos.
+    public EntradaStock[] ConsultarEntradas()
+    {
+        lock (_cerrojo)
+        {
+            return _estado.Stock.ValoresEnOrden();
+        }
+    }
+
     /// Búsqueda exacta (distingue mayúsculas). Devuelve false si el producto no es de esta sede.
     public bool BuscarStock(string productoId, [MaybeNullWhen(false)] out StockLocal stock)
     {
