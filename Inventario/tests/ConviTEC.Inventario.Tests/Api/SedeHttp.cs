@@ -24,16 +24,18 @@ public sealed class SedeHttp : IAsyncDisposable
     private readonly DirectorioTemporal _directorio;
     private readonly WebApplication _app;
     private readonly HttpClient _cliente;
+    private readonly bool _poseeDirectorio;
 
     public ResultadoArranque Arranque { get; }
     public HttpClient Cliente => _cliente;
 
-    private SedeHttp(DirectorioTemporal directorio, ResultadoArranque arranque, WebApplication app, HttpClient cliente)
+    private SedeHttp(DirectorioTemporal directorio, ResultadoArranque arranque, WebApplication app, HttpClient cliente, bool poseeDirectorio)
     {
         _directorio = directorio;
         Arranque = arranque;
         _app = app;
         _cliente = cliente;
+        _poseeDirectorio = poseeDirectorio;
     }
 
     /// Arranca una sede nueva (arranque inicial) con el maestro común y las existencias dadas.
@@ -47,7 +49,9 @@ public sealed class SedeHttp : IAsyncDisposable
     }
 
     /// Arranca sobre un directorio que ya contiene archivos (p. ej. un estado guardado: recuperación).
-    public static async Task<SedeHttp> ArrancarAsync(DirectorioTemporal directorio, string sedeId)
+    /// Con <paramref name="poseeDirectorio"/> en false, al cerrar la sede el directorio se conserva
+    /// para simular un reinicio con otra instancia sobre los mismos archivos.
+    public static async Task<SedeHttp> ArrancarAsync(DirectorioTemporal directorio, string sedeId, bool poseeDirectorio = true)
     {
         try
         {
@@ -57,11 +61,14 @@ public sealed class SedeHttp : IAsyncDisposable
 
             string direccion = PrimeraDireccion(app);
             HttpClient cliente = new HttpClient { BaseAddress = new Uri(direccion) };
-            return new SedeHttp(directorio, arranque, app, cliente);
+            return new SedeHttp(directorio, arranque, app, cliente, poseeDirectorio);
         }
         catch
         {
-            directorio.Dispose();
+            if (poseeDirectorio)
+            {
+                directorio.Dispose();
+            }
             throw;
         }
     }
@@ -80,6 +87,9 @@ public sealed class SedeHttp : IAsyncDisposable
         _cliente.Dispose();
         await _app.StopAsync();
         await _app.DisposeAsync();
-        _directorio.Dispose();
+        if (_poseeDirectorio)
+        {
+            _directorio.Dispose();
+        }
     }
 }
