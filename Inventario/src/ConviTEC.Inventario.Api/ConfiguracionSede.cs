@@ -15,7 +15,11 @@ public sealed class ConfiguracionSede
     /// Las otras sedes, destino de las publicaciones de catálogo. Vacío si la sede opera sola.
     public string[] SedesRemotas { get; }
 
-    public ConfiguracionSede(string sedeId, string directorioDatos, string url, string[]? sedesRemotas = null)
+    /// Dirección AMQP del broker RabbitMQ (por defecto el de la máquina local).
+    public string RabbitUri { get; }
+
+    public ConfiguracionSede(
+        string sedeId, string directorioDatos, string url, string[]? sedesRemotas = null, string? rabbitUri = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sedeId, nameof(sedeId));
         ArgumentException.ThrowIfNullOrWhiteSpace(directorioDatos, nameof(directorioDatos));
@@ -24,11 +28,13 @@ public sealed class ConfiguracionSede
         DirectorioDatos = directorioDatos;
         Url = url;
         SedesRemotas = Negocio.SedesRemotas.Validar(sedeId, sedesRemotas ?? Array.Empty<string>());
+        RabbitUri = string.IsNullOrWhiteSpace(rabbitUri) ? Rabbit.ConexionRabbit.UriPorDefecto : rabbitUri;
     }
 
-    /// Lee los argumentos <c>--sede</c>, <c>--datos</c>, <c>--url</c> y <c>--remotas</c> (lista separada por comas);
-    /// si faltan usa las variables de entorno <c>CONVITEC_SEDE</c>, <c>CONVITEC_DATOS</c>, <c>CONVITEC_URL</c> y
-    /// <c>CONVITEC_REMOTAS</c>. Lanza ArgumentException si falta sede o datos, o si las remotas son inválidas.
+    /// Lee los argumentos <c>--sede</c>, <c>--datos</c>, <c>--url</c>, <c>--remotas</c> (lista separada por comas) y
+    /// <c>--rabbitmq</c>; si faltan usa las variables de entorno <c>CONVITEC_SEDE</c>, <c>CONVITEC_DATOS</c>,
+    /// <c>CONVITEC_URL</c>, <c>CONVITEC_REMOTAS</c> y <c>CONVITEC_RABBITMQ</c>. Lanza ArgumentException si falta sede
+    /// o datos, o si las remotas son inválidas.
     public static ConfiguracionSede Leer(string[] argumentos)
     {
         ArgumentNullException.ThrowIfNull(argumentos, nameof(argumentos));
@@ -37,6 +43,7 @@ public sealed class ConfiguracionSede
         string? datos = ValorDe(argumentos, "--datos") ?? Environment.GetEnvironmentVariable("CONVITEC_DATOS");
         string? url = ValorDe(argumentos, "--url") ?? Environment.GetEnvironmentVariable("CONVITEC_URL");
         string? remotas = ValorDe(argumentos, "--remotas") ?? Environment.GetEnvironmentVariable("CONVITEC_REMOTAS");
+        string? rabbit = ValorDe(argumentos, "--rabbitmq") ?? Environment.GetEnvironmentVariable("CONVITEC_RABBITMQ");
 
         if (string.IsNullOrWhiteSpace(sede))
         {
@@ -47,7 +54,7 @@ public sealed class ConfiguracionSede
             throw new ArgumentException("Falta el directorio de datos: use --datos <ruta> o la variable CONVITEC_DATOS.");
         }
         return new ConfiguracionSede(
-            sede, datos, string.IsNullOrWhiteSpace(url) ? UrlPorDefecto : url, SepararRemotas(remotas));
+            sede, datos, string.IsNullOrWhiteSpace(url) ? UrlPorDefecto : url, SepararRemotas(remotas), rabbit);
     }
 
     /// "ALA,SJ" → ["ALA","SJ"]. Texto vacío o ausente → ninguna. Un elemento vacío ("ALA,,SJ") se conserva

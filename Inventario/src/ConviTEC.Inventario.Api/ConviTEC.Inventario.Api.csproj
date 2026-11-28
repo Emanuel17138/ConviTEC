@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ConviTEC.Inventario\ConviTEC.Inventario.csproj" />
+    <ProjectReference Include="..\ConviTEC.Inventario.Rabbit\ConviTEC.Inventario.Rabbit.csproj" />
   </ItemGroup>
 
   <ItemGroup>

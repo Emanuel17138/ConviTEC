@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/ConviTEC.Inventario/ConviTEC.Inventario.csproj" />
     <Project Path="src/ConviTEC.Inventario.Api/ConviTEC.Inventario.Api.csproj" />
+    <Project Path="src/ConviTEC.Inventario.Rabbit/ConviTEC.Inventario.Rabbit.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ConviTEC.Inventario.Tests/ConviTEC.Inventario.Tests.csproj" />
