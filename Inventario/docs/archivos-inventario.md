@@ -7,6 +7,7 @@ Cada sede tiene su propio directorio y nunca lee archivos de otra (RNF14). Los a
 | `maestro-productos.json` | `{productos:[{productoId,nombre,descripcion,categoria,precioUnitarioCentimos}]}` | Solo en el arranque inicial |
 | `existencias-iniciales.json` | `{sedeId,existencias:[{productoId,existencia}]}`: productos que maneja la sede | Solo en el arranque inicial |
 | `estado-inventario.json` | `{version,sedeId,stock:[{producto:{...},existencia,reservada,revision}],lotes,comandos,reposiciones,salidasPendientes}` (ver más abajo) | Siempre que exista (recuperación) |
+| `catalogo-replicado.json` | `{version,sedeId,sedesSincronizadas:[sedeId],ofertas:[{sedeId,producto:{...},disponible,revision}]}` (ver "Catálogo replicado") | Siempre que exista (recuperación) |
 
 Ejemplos en `datos/ejemplo/`.
 
@@ -71,6 +72,25 @@ Las pruebas simulan los dos cortes con un punto de interrupción interno de `Rep
 ## Sedes remotas
 
 `--remotas SJ,ALA,LIM` (o `CONVITEC_REMOTAS`) lista las otras sedes. Es opcional (vacío por defecto); se rechazan identificadores vacíos, repetidos o iguales a la sede propia. RF03 reutiliza esta misma lista para solicitar instantáneas.
+
+## Catálogo replicado (RF03)
+
+`CatalogoReplicado` guarda la última oferta recibida de cada otra sede, por pareja sede–producto, en `catalogo-replicado.json`. `CargadorCatalogo.Cargar(rutas, sedesRemotas)` la reconstruye al arrancar, entrada por entrada (RNF16). El archivo es propio de la sede, como todos (RNF14).
+
+| Sección | Contenido | Clave en memoria (AVL) |
+|---|---|---|
+| `ofertas` | `{sedeId,producto:{productoId,nombre,descripcion,categoria,precioUnitarioCentimos},disponible,revision}`: valor absoluto, ceros incluidos | `productoId` + U+001F + `sedeId` |
+| `sedesSincronizadas` | Sedes cuya primera instantánea ya llegó, aunque viniera vacía | `sedeId` |
+
+**Regla de aplicación.** `AplicarCambio` (`catalogo.actualizado`) y `AplicarInstantanea` (`catalogo.instantanea`) aplican cada entrada solo si la pareja sede–producto es nueva o su revisión es mayor que la almacenada. Con 8 almacenado, llegan 10, 9 y 10: queda 10. Una instantánea no borra las ofertas que no menciona. Solo la instantánea (también la vacía) marca la sede; un cambio aislado no. La copia está `EstaInicializado` cuando todas las sedes de `--remotas` están marcadas, y se conserva al reiniciar.
+
+**Escritura.** Igual que el inventario: bajo un cerrojo propio se prepara el contenido nuevo, se guarda el archivo completo de forma atómica (`ArchivoJson.Guardar`, mismo `.tmp` + `Flush` + `File.Move`) y solo después se instala en memoria. Si la entrada no cambia nada no se escribe. El método vuelve cuando el resultado ya es durable, así el consumidor puede acusar el mensaje después.
+
+**Por qué un archivo aparte.** La réplica no necesita ser atómica con el stock: ninguna operación de stock lee ofertas ajenas ni al revés. Así un mensaje de otra sede no reescribe lotes y comandos ni compite con una reserva por el cerrojo del inventario, y el archivo solo crece con productos × sedes.
+
+**Orden de la vista.** La clave compuesta `productoId` + U+001F + `sedeId` con comparación ordinal hace que recorrer el AVL en orden entregue productoId ascendente y, dentro de cada producto, sedeId ascendente (U+001F es menor que cualquier carácter imprimible, así `CA` precede a `CAF`). `ConsultarOfertas()` ya devuelve ese orden sin ordenar de nuevo; solo omite las sedes que ya no están en `--remotas`.
+
+Validación al recuperar (con archivo y posición): versión desconocida, `sedeId` de otra sede, secciones faltantes, elementos nulos, campos faltantes, producto inválido, `disponible` o `revision` negativos, marca u oferta de la propia sede, marcas repetidas y pareja sede–producto repetida. Sin archivo (primer arranque) la réplica empieza vacía y no inicializada, sin escribir nada. Las ofertas y marcas de una sede que ya no está configurada se conservan, pero no se consultan ni cuentan.
 
 ## Consulta local reutilizable
 

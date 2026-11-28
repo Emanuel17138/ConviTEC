@@ -15,12 +15,13 @@ catch (ArgumentException e)
 }
 
 ResultadoArranque arranque;
+CatalogoReplicado catalogo;
 try
 {
     // Valida todo antes de instalar el estado: si algo falla la sede no abre el puerto.
-    arranque = new CargadorInventario().Cargar(
-        RutasArchivosInventario.EnDirectorio(configuracion.DirectorioDatos, configuracion.SedeId),
-        configuracion.SedesRemotas);
+    RutasArchivosInventario rutas = RutasArchivosInventario.EnDirectorio(configuracion.DirectorioDatos, configuracion.SedeId);
+    arranque = new CargadorInventario().Cargar(rutas, configuracion.SedesRemotas);
+    catalogo = new CargadorCatalogo().Cargar(rutas, configuracion.SedesRemotas);
 }
 catch (DatosInventarioInvalidosException e)
 {
@@ -30,6 +31,9 @@ catch (DatosInventarioInvalidosException e)
 
 Console.WriteLine(
     $"Sede {configuracion.SedeId}: arranque {arranque.Modo}, {arranque.Inventario.Cantidad} producto(s).");
+Console.WriteLine(
+    $"Catálogo replicado: {catalogo.ConsultarOfertas().Length} oferta(s), "
+    + $"{catalogo.SedesPendientes().Length} sede(s) sin primera instantánea.");
 
 ServidorSede.Crear(arranque.Inventario, configuracion.Url).Run();
 return 0;
