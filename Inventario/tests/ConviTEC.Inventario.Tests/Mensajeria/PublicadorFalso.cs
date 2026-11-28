@@ -12,11 +12,14 @@ internal sealed class PublicadorFalso : IPublicadorMensajes
 
     public bool Falla { get; set; }
 
+    /// Falla solo para las claves de ruta que cumplan el predicado (por ejemplo, una sede sin cola).
+    public Func<string, bool>? FallaPara { get; set; }
+
     public SobreSaliente[] Enviados => _enviados;
 
     public Task PublicarAsync(string claveRuta, Sobre sobre, CancellationToken cancelacion = default)
     {
-        if (Falla)
+        if (Falla || (FallaPara != null && FallaPara(claveRuta)))
         {
             throw new EnvioFallidoException("Sin destinatario (simulado).");
         }

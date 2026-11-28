@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using ConviTEC.Inventario.Mensajeria;
 using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
 using RabbitMQ.Client.Exceptions;
 
 namespace ConviTEC.Inventario.Rabbit;
@@ -19,9 +20,28 @@ public sealed class ConexionRabbit : IAsyncDisposable
 
     internal IConnection Conexion => _conexion;
 
+    /// Se dispara cuando la recuperación automática restablece la conexión tras una caída del broker o de la red.
+    /// Quien la escucha vuelve a pedir lo que pudo perderse (por ejemplo, las instantáneas del catálogo).
+    public event Func<Task>? Reconectada;
+
     private ConexionRabbit(IConnection conexion)
     {
         _conexion = conexion;
+        _conexion.RecoverySucceededAsync += AlRecuperarAsync;
+    }
+
+    private async Task AlRecuperarAsync(object remitente, AsyncEventArgs argumentos)
+    {
+        Func<Task>? manejadores = Reconectada;
+        if (manejadores == null)
+        {
+            return;
+        }
+
+        foreach (Func<Task> manejador in manejadores.GetInvocationList())
+        {
+            await manejador();
+        }
     }
 
     /// Abre la conexión con recuperación automática. Lanza <see cref="EnvioFallidoException"/> si el broker no responde.

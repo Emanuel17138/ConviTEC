@@ -36,11 +36,14 @@ Console.WriteLine(
     $"Catálogo replicado: {catalogo.ConsultarOfertas().Length} oferta(s), "
     + $"{catalogo.SedesPendientes().Length} sede(s) sin primera instantánea.");
 
-// Comandos de stock que llegan por RabbitMQ a inventario.<sede>. RF03 registrará aquí sus manejadores de catalogo.*.
+// Lo que llega por RabbitMQ a inventario.<sede>: comandos de stock (RF02) y mensajes de catálogo (RF03).
 DespachadorInventario despachador = new DespachadorInventario(configuracion.SedeId);
 despachador.Registrar(new ManejadorComandosStock(configuracion.SedeId, new ProveedorStock(arranque.Inventario)));
+despachador.Registrar(new ManejadorMensajesCatalogo(configuracion.SedeId, arranque.Inventario, catalogo));
 OpcionesMensajeria mensajeria = new OpcionesMensajeria(
-    configuracion.SedeId, configuracion.SedesRemotas, configuracion.RabbitUri, despachador);
+    configuracion.SedeId, configuracion.SedesRemotas, configuracion.RabbitUri, despachador,
+    publicador => new SincronizadorCatalogo(
+        configuracion.SedeId, configuracion.SedesRemotas, arranque.Inventario, publicador, Console.WriteLine));
 
 ServidorSede.Crear(arranque.Inventario, configuracion.Url, mensajeria, catalogo).Run();
 return 0;

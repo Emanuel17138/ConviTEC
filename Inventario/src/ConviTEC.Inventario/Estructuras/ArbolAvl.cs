@@ -91,6 +91,20 @@ public sealed class ArbolAvl<TClave, TValor> : IIndiceOrdenado<TClave, TValor>
         return false;
     }
 
+    /// Borra la clave y rebalancea el camino recorrido: O(log n).
+    public bool Eliminar(TClave clave)
+    {
+        ArgumentNullException.ThrowIfNull(clave, nameof(clave));
+
+        bool eliminado = false;
+        _raiz = Eliminar(_raiz, clave, ref eliminado);
+        if (eliminado)
+        {
+            Cantidad--;
+        }
+        return eliminado;
+    }
+
     public TClave[] ClavesEnOrden()
     {
         TClave[] resultado = new TClave[Cantidad];
@@ -155,6 +169,53 @@ public sealed class ArbolAvl<TClave, TValor> : IIndiceOrdenado<TClave, TValor>
         }
 
         if (!insertado)
+        {
+            return nodo;
+        }
+        return Rebalancear(nodo);
+    }
+
+    private Nodo? Eliminar(Nodo? nodo, TClave clave, ref bool eliminado)
+    {
+        if (nodo == null)
+        {
+            return null;
+        }
+
+        int comparacion = _comparador.Compare(clave, nodo.Clave);
+        if (comparacion < 0)
+        {
+            nodo.Izquierdo = Eliminar(nodo.Izquierdo, clave, ref eliminado);
+        }
+        else if (comparacion > 0)
+        {
+            nodo.Derecho = Eliminar(nodo.Derecho, clave, ref eliminado);
+        }
+        else
+        {
+            eliminado = true;
+            if (nodo.Izquierdo == null)
+            {
+                return nodo.Derecho;
+            }
+            if (nodo.Derecho == null)
+            {
+                return nodo.Izquierdo;
+            }
+
+            // Dos hijos: el sucesor en orden (el menor del subárbol derecho) ocupa su lugar.
+            Nodo sucesor = nodo.Derecho;
+            while (sucesor.Izquierdo != null)
+            {
+                sucesor = sucesor.Izquierdo;
+            }
+            nodo.Clave = sucesor.Clave;
+            nodo.Valor = sucesor.Valor;
+            bool quitado = false;
+            nodo.Derecho = Eliminar(nodo.Derecho, sucesor.Clave, ref quitado);
+        }
+
+        if (!eliminado)
         {
             return nodo;
         }

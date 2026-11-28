@@ -154,6 +154,69 @@ public sealed class ArbolBinarioBusqueda<TClave, TValor> : IIndiceOrdenado<TClav
         return false;
     }
 
+    public bool Eliminar(TClave clave)
+    {
+        ArgumentNullException.ThrowIfNull(clave, nameof(clave));
+
+        Nodo? padre = null;
+        Nodo? actual = _raiz;
+        int comparacion = 0;
+        while (actual != null)
+        {
+            comparacion = _comparador.Compare(clave, actual.Clave);
+            if (comparacion == 0)
+            {
+                break;
+            }
+            padre = actual;
+            actual = comparacion < 0 ? actual.Izquierdo : actual.Derecho;
+        }
+        if (actual == null)
+        {
+            return false;
+        }
+
+        if (actual.Izquierdo != null && actual.Derecho != null)
+        {
+            // Dos hijos: el sucesor en orden toma la clave y el valor, y se quita su nodo (a lo sumo un hijo).
+            Nodo padreSucesor = actual;
+            Nodo sucesor = actual.Derecho;
+            while (sucesor.Izquierdo != null)
+            {
+                padreSucesor = sucesor;
+                sucesor = sucesor.Izquierdo;
+            }
+            actual.Clave = sucesor.Clave;
+            actual.Valor = sucesor.Valor;
+            Sustituir(padreSucesor, sucesor, sucesor.Derecho);
+        }
+        else
+        {
+            Sustituir(padre, actual, actual.Izquierdo ?? actual.Derecho);
+        }
+
+        Cantidad--;
+        return true;
+    }
+
+    /// Cuelga <paramref name="nuevo"/> en el lugar que ocupaba <paramref name="viejo"/> bajo <paramref name="padre"/>
+    /// (null si <paramref name="viejo"/> era la raíz).
+    private void Sustituir(Nodo? padre, Nodo viejo, Nodo? nuevo)
+    {
+        if (padre == null)
+        {
+            _raiz = nuevo;
+        }
+        else if (padre.Izquierdo == viejo)
+        {
+            padre.Izquierdo = nuevo;
+        }
+        else
+        {
+            padre.Derecho = nuevo;
+        }
+    }
+
     public TClave[] ClavesEnOrden()
     {
         Nodo[] nodos = NodosEnOrden();

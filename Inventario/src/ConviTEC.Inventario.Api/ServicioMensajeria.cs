@@ -16,7 +16,12 @@ public sealed class OpcionesMensajeria
     public string RabbitUri { get; }
     public DespachadorInventario Despachador { get; }
 
-    public OpcionesMensajeria(string sedeId, string[] sedesRemotas, string rabbitUri, DespachadorInventario despachador)
+    /// Crea el emisor de la réplica del catálogo sobre el publicador de la conexión. Null si la sede no replica.
+    public Func<IPublicadorMensajes, SincronizadorCatalogo>? FabricaSincronizador { get; }
+
+    public OpcionesMensajeria(
+        string sedeId, string[] sedesRemotas, string rabbitUri, DespachadorInventario despachador,
+        Func<IPublicadorMensajes, SincronizadorCatalogo>? fabricaSincronizador = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sedeId, nameof(sedeId));
         ArgumentNullException.ThrowIfNull(sedesRemotas, nameof(sedesRemotas));
@@ -26,6 +31,7 @@ public sealed class OpcionesMensajeria
         SedesRemotas = sedesRemotas;
         RabbitUri = rabbitUri;
         Despachador = despachador;
+        FabricaSincronizador = fabricaSincronizador;
     }
 }
 
@@ -82,7 +88,30 @@ public sealed class ServicioMensajeria : BackgroundService
 
             try
             {
-                await Task.Delay(Timeout.Infinite, detencion);
+                if (_opciones.FabricaSincronizador == null)
+                {
+                    await Task.Delay(Timeout.Infinite, detencion);
+                }
+                else
+                {
+                    // Al arrancar pide las instantáneas y vacía lo pendiente; al reconectar vuelve a pedirlas.
+                    SincronizadorCatalogo sincronizador = _opciones.FabricaSincronizador(publicador);
+                    Func<Task> alReconectar = () =>
+                    {
+                        _log.LogInformation("Conexión con el broker recuperada: se piden de nuevo las instantáneas.");
+                        sincronizador.AvisarReconexion();
+                        return Task.CompletedTask;
+                    };
+                    conexion.Reconectada += alReconectar;
+                    try
+                    {
+                        await sincronizador.EjecutarAsync(detencion);
+                    }
+                    finally
+                    {
+                        conexion.Reconectada -= alReconectar;
+                    }
+                }
             }
             catch (OperationCanceledException)
             {
