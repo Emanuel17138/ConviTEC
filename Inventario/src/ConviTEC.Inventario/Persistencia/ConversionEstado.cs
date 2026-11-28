@@ -31,6 +31,28 @@ public static class ConversionEstado
         };
     }
 
+    /// Arma el contenido de catalogo-replicado.json: ofertas (ya en orden) y sedes con primera instantánea.
+    public static CatalogoReplicadoDto ConstruirCatalogo(string sedeId, string[] sedesSincronizadas, OfertaReplicada[] ofertas)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sedeId, nameof(sedeId));
+        ArgumentNullException.ThrowIfNull(sedesSincronizadas, nameof(sedesSincronizadas));
+        ArgumentNullException.ThrowIfNull(ofertas, nameof(ofertas));
+
+        return new CatalogoReplicadoDto
+        {
+            Version = CatalogoReplicadoDto.VersionActual,
+            SedeId = sedeId,
+            SedesSincronizadas = (string[])sedesSincronizadas.Clone(),
+            Ofertas = Convertir(ofertas, oferta => new OfertaReplicadaGuardadaDto
+            {
+                SedeId = oferta.SedeId,
+                Producto = ADto(oferta.Producto),
+                Disponible = oferta.Disponible,
+                Revision = oferta.Revision,
+            }),
+        };
+    }
+
     private static TDto[] Convertir<TOrigen, TDto>(TOrigen[] origen, Func<TOrigen, TDto> convertir)
     {
         TDto[] destino = new TDto[origen.Length];
@@ -41,19 +63,20 @@ public static class ConversionEstado
         return destino;
     }
 
+    private static ProductoDto ADto(Producto producto) => new ProductoDto
+    {
+        ProductoId = producto.ProductoId,
+        Nombre = producto.Nombre,
+        Descripcion = producto.Descripcion,
+        Categoria = producto.Categoria,
+        PrecioUnitarioCentimos = producto.PrecioUnitarioCentimos,
+    };
+
     private static StockGuardadoDto ADto(EntradaStock entrada)
     {
-        Producto producto = entrada.Stock.Producto;
         return new StockGuardadoDto
         {
-            Producto = new ProductoDto
-            {
-                ProductoId = producto.ProductoId,
-                Nombre = producto.Nombre,
-                Descripcion = producto.Descripcion,
-                Categoria = producto.Categoria,
-                PrecioUnitarioCentimos = producto.PrecioUnitarioCentimos,
-            },
+            Producto = ADto(entrada.Stock.Producto),
             Existencia = entrada.Stock.Existencia,
             Reservada = entrada.Stock.Reservada,
             Revision = entrada.Revision,

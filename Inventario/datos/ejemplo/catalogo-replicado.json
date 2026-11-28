@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "sedeId": "SJ",
+  "sedesSincronizadas": ["ALA", "LIB"],
+  "ofertas": [
+    {
+      "sedeId": "LIB",
+      "producto": {
+        "productoId": "CAF",
+        "nombre": "Café",
+        "descripcion": "Café molido 500 g",
+        "categoria": "Bebidas",
+        "precioUnitarioCentimos": 150000
+      },
+      "disponible": 2,
+      "revision": 10
+    }
+  ]
+}

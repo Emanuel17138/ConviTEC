@@ -160,27 +160,8 @@ public sealed class CargadorInventario
         }
     }
 
-    private static Producto ConvertirProducto(ProductoDto? dto, string archivo, string posicion)
-    {
-        if (dto == null)
-        {
-            throw new DatosInventarioInvalidosException(archivo, $"{posicion} es nulo.");
-        }
-        if (dto.PrecioUnitarioCentimos == null)
-        {
-            throw new DatosInventarioInvalidosException(archivo, $"{posicion}: falta 'precioUnitarioCentimos'.");
-        }
-
-        try
-        {
-            return new Producto(
-                dto.ProductoId!, dto.Nombre!, dto.Descripcion!, dto.Categoria!, dto.PrecioUnitarioCentimos.Value);
-        }
-        catch (ArgumentException e)
-        {
-            throw new DatosInventarioInvalidosException(archivo, $"{posicion}: {e.Message}", e);
-        }
-    }
+    private static Producto ConvertirProducto(ProductoDto? dto, string archivo, string posicion) =>
+        ConversionProducto.Convertir(dto, archivo, posicion);
 
     /// El constructor de StockLocal impone 0 ≤ reservada ≤ existencia.
     private static StockLocal CrearStock(Producto producto, int existencia, int reservada, string archivo, string posicion)

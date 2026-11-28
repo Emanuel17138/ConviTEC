@@ -162,17 +162,17 @@ public sealed class InventarioLocal
 
             _repositorio.GuardarEstado(ConversionEstado.Construir(
                 SedeId,
-                Fusionar(_estado.Stock, stockNuevo),
-                Fusionar(_estado.Lotes, cambio.Lotes),
-                Fusionar(_estado.Comandos, cambio.Comandos),
-                Fusionar(_estado.Reposiciones, cambio.Reposiciones),
-                Fusionar(_estado.Salidas, salidasNuevas)));
+                FusionIndices.Fusionar(_estado.Stock, stockNuevo),
+                FusionIndices.Fusionar(_estado.Lotes, cambio.Lotes),
+                FusionIndices.Fusionar(_estado.Comandos, cambio.Comandos),
+                FusionIndices.Fusionar(_estado.Reposiciones, cambio.Reposiciones),
+                FusionIndices.Fusionar(_estado.Salidas, salidasNuevas)));
 
-            Instalar(_estado.Stock, stockNuevo);
-            Instalar(_estado.Lotes, cambio.Lotes);
-            Instalar(_estado.Comandos, cambio.Comandos);
-            Instalar(_estado.Reposiciones, cambio.Reposiciones);
-            Instalar(_estado.Salidas, salidasNuevas);
+            FusionIndices.Instalar(_estado.Stock, stockNuevo);
+            FusionIndices.Instalar(_estado.Lotes, cambio.Lotes);
+            FusionIndices.Instalar(_estado.Comandos, cambio.Comandos);
+            FusionIndices.Instalar(_estado.Reposiciones, cambio.Reposiciones);
+            FusionIndices.Instalar(_estado.Salidas, salidasNuevas);
             return resultado;
         }
     }
@@ -218,52 +218,5 @@ public sealed class InventarioLocal
             }
         }
         return salidas;
-    }
-
-    /// Contenido del snapshot: lo vivo con las sustituciones de <paramref name="nuevo"/> en su lugar y,
-    /// al final, las entradas que aún no existían. No modifica ninguno de los dos índices.
-    private static T[] Fusionar<T>(ArbolAvl<string, T> vivo, ArbolAvl<string, T> nuevo)
-    {
-        string[] clavesVivas = vivo.ClavesEnOrden();
-        T[] valoresVivos = vivo.ValoresEnOrden();
-        string[] clavesNuevas = nuevo.ClavesEnOrden();
-        T[] valoresNuevos = nuevo.ValoresEnOrden();
-
-        int soloNuevos = 0;
-        for (int i = 0; i < clavesNuevas.Length; i++)
-        {
-            if (!vivo.Contiene(clavesNuevas[i]))
-            {
-                soloNuevos++;
-            }
-        }
-
-        T[] resultado = new T[valoresVivos.Length + soloNuevos];
-        for (int i = 0; i < valoresVivos.Length; i++)
-        {
-            resultado[i] = nuevo.Buscar(clavesVivas[i], out T? sustituto) ? sustituto : valoresVivos[i];
-        }
-        int posicion = valoresVivos.Length;
-        for (int i = 0; i < clavesNuevas.Length; i++)
-        {
-            if (!vivo.Contiene(clavesNuevas[i]))
-            {
-                resultado[posicion++] = valoresNuevos[i];
-            }
-        }
-        return resultado;
-    }
-
-    private static void Instalar<T>(ArbolAvl<string, T> vivo, ArbolAvl<string, T> nuevo)
-    {
-        string[] claves = nuevo.ClavesEnOrden();
-        T[] valores = nuevo.ValoresEnOrden();
-        for (int i = 0; i < claves.Length; i++)
-        {
-            if (!vivo.Reemplazar(claves[i], valores[i]))
-            {
-                vivo.Insertar(claves[i], valores[i]);
-            }
-        }
     }
 }
