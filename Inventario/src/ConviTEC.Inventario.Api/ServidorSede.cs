@@ -14,13 +14,23 @@ namespace ConviTEC.Inventario.Api;
 public static class ServidorSede
 {
     /// <param name="mensajeria">Si se indica, la sede también consume su cola de inventario en RabbitMQ.</param>
-    public static WebApplication Crear(InventarioLocal inventario, string url, OpcionesMensajeria? mensajeria = null)
+    /// <param name="catalogo">Si se indica, la sede expone <c>GET /api/v1/catalogo</c> y registra el puerto
+    /// <see cref="IConsultaCatalogo"/> para Pedidos.</param>
+    public static WebApplication Crear(
+        InventarioLocal inventario, string url, OpcionesMensajeria? mensajeria = null, CatalogoReplicado? catalogo = null)
     {
         ArgumentNullException.ThrowIfNull(inventario, nameof(inventario));
         ArgumentException.ThrowIfNullOrWhiteSpace(url, nameof(url));
 
+        // Falla antes de abrir nada si el inventario y la réplica no son de la misma sede.
+        ConsultaCatalogo? consulta = catalogo == null ? null : new ConsultaCatalogo(inventario, catalogo);
+
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
         builder.WebHost.UseUrls(url);
+        if (consulta != null)
+        {
+            builder.Services.AddSingleton<IConsultaCatalogo>(consulta);
+        }
         if (mensajeria != null)
         {
             builder.Services.AddHostedService(proveedor =>
@@ -40,6 +50,10 @@ public static class ServidorSede
 
         // Registro de la operación en el arranque de la sede: el endpoint existe solo con el estado ya instalado.
         app.MapearInventario(inventario);
+        if (consulta != null)
+        {
+            app.MapearCatalogo(consulta);
+        }
         return app;
     }
 }

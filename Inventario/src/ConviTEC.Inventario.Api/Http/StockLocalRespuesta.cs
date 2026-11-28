@@ -4,7 +4,13 @@ namespace ConviTEC.Inventario.Api.Http;
 
 /// Producto tal como lo expone el contrato REST v1.
 public sealed record ProductoRespuesta(
-    string ProductoId, string Nombre, string Descripcion, string Categoria, long PrecioUnitarioCentimos);
+    string ProductoId, string Nombre, string Descripcion, string Categoria, long PrecioUnitarioCentimos)
+{
+    public static ProductoRespuesta Desde(Producto producto) =>
+        new ProductoRespuesta(
+            producto.ProductoId, producto.Nombre, producto.Descripcion, producto.Categoria,
+            producto.PrecioUnitarioCentimos);
+}
 
 /// StockLocal tal como lo expone el contrato REST v1: {producto, existencia, reservada, disponible}.
 /// Proyectar a un tipo propio fija los campos exactos y desacopla el JSON del modelo de dominio.
@@ -12,11 +18,8 @@ public sealed record StockLocalRespuesta(ProductoRespuesta Producto, int Existen
 {
     public static StockLocalRespuesta Desde(StockLocal stock)
     {
-        Producto producto = stock.Producto;
         return new StockLocalRespuesta(
-            new ProductoRespuesta(
-                producto.ProductoId, producto.Nombre, producto.Descripcion, producto.Categoria,
-                producto.PrecioUnitarioCentimos),
+            ProductoRespuesta.Desde(stock.Producto),
             stock.Existencia,
             stock.Reservada,
             stock.Disponible);

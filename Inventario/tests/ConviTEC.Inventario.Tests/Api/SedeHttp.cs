@@ -6,6 +6,7 @@ using ConviTEC.Inventario.Negocio;
 using ConviTEC.Inventario.Persistencia;
 using ConviTEC.Inventario.Tests.Persistencia;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace ConviTEC.Inventario.Tests.Api;
 
@@ -27,41 +28,50 @@ public sealed class SedeHttp : IAsyncDisposable
     private readonly bool _poseeDirectorio;
 
     public ResultadoArranque Arranque { get; }
+    public CatalogoReplicado Catalogo { get; }
+    public IConsultaCatalogo Consulta { get; }
     public HttpClient Cliente => _cliente;
 
-    private SedeHttp(DirectorioTemporal directorio, ResultadoArranque arranque, WebApplication app, HttpClient cliente, bool poseeDirectorio)
+    private SedeHttp(
+        DirectorioTemporal directorio, ResultadoArranque arranque, CatalogoReplicado catalogo, WebApplication app,
+        HttpClient cliente, bool poseeDirectorio)
     {
         _directorio = directorio;
         Arranque = arranque;
+        Catalogo = catalogo;
+        Consulta = app.Services.GetRequiredService<IConsultaCatalogo>();
         _app = app;
         _cliente = cliente;
         _poseeDirectorio = poseeDirectorio;
     }
 
     /// Arranca una sede nueva (arranque inicial) con el maestro común y las existencias dadas.
-    public static Task<SedeHttp> ArrancarInicialAsync(string sedeId, string existenciasJson)
+    public static Task<SedeHttp> ArrancarInicialAsync(string sedeId, string existenciasJson, params string[] sedesRemotas)
     {
         DirectorioTemporal directorio = new DirectorioTemporal();
         directorio.Escribir(RutasArchivosInventario.NombreMaestro, Maestro);
         directorio.Escribir(RutasArchivosInventario.NombreExistenciasIniciales,
             "{\"sedeId\":\"" + sedeId + "\",\"existencias\":" + existenciasJson + "}");
-        return ArrancarAsync(directorio, sedeId);
+        return ArrancarAsync(directorio, sedeId, true, sedesRemotas);
     }
 
     /// Arranca sobre un directorio que ya contiene archivos (p. ej. un estado guardado: recuperación).
     /// Con <paramref name="poseeDirectorio"/> en false, al cerrar la sede el directorio se conserva
     /// para simular un reinicio con otra instancia sobre los mismos archivos.
-    public static async Task<SedeHttp> ArrancarAsync(DirectorioTemporal directorio, string sedeId, bool poseeDirectorio = true)
+    public static async Task<SedeHttp> ArrancarAsync(
+        DirectorioTemporal directorio, string sedeId, bool poseeDirectorio = true, params string[] sedesRemotas)
     {
         try
         {
-            ResultadoArranque arranque = new CargadorInventario().Cargar(directorio.Rutas(sedeId));
-            WebApplication app = ServidorSede.Crear(arranque.Inventario, "http://127.0.0.1:0");
+            RutasArchivosInventario rutas = directorio.Rutas(sedeId);
+            ResultadoArranque arranque = new CargadorInventario().Cargar(rutas, sedesRemotas);
+            CatalogoReplicado catalogo = new CargadorCatalogo().Cargar(rutas, sedesRemotas);
+            WebApplication app = ServidorSede.Crear(arranque.Inventario, "http://127.0.0.1:0", null, catalogo);
             await app.StartAsync();
 
             string direccion = PrimeraDireccion(app);
             HttpClient cliente = new HttpClient { BaseAddress = new Uri(direccion) };
-            return new SedeHttp(directorio, arranque, app, cliente, poseeDirectorio);
+            return new SedeHttp(directorio, arranque, catalogo, app, cliente, poseeDirectorio);
         }
         catch
         {
