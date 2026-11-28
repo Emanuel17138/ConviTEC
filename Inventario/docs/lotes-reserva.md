@@ -1,6 +1,6 @@
 # Lotes de reserva: lado proveedor (RF02)
 
-`ProveedorStock` (`Negocio/ProveedorStock.cs`) aplica `stock.reservar`, `stock.confirmar` y `stock.liberar` sobre el inventario de la sede. Recibe el comando ya sacado del sobre (`SolicitudReserva` o `SolicitudDecision`) y devuelve el `ResultadoStock` del contrato. El transporte RabbitMQ y el sobre quedan para `rf02-mensajes`.
+`ProveedorStock` (`Negocio/ProveedorStock.cs`) aplica `stock.reservar`, `stock.confirmar` y `stock.liberar` sobre el inventario de la sede. Recibe el comando ya sacado del sobre (`SolicitudReserva` o `SolicitudDecision`) y devuelve el `ResultadoStock` del contrato. El sobre y el transporte RabbitMQ están en [mensajeria-rabbitmq.md](mensajeria-rabbitmq.md).
 
 Cada comando corre entero dentro de `InventarioLocal.Aplicar`: exclusión mutua local, cambio completo (cantidades, lote y resultado) guardado de forma atómica y resultado devuelto solo después de persistir. Si el guardado falla, no cambia nada y el mismo comando se reprocesa como nuevo.
 

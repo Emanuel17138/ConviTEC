@@ -1,5 +1,6 @@
 using System;
 using ConviTEC.Inventario.Api;
+using ConviTEC.Inventario.Mensajeria;
 using ConviTEC.Inventario.Negocio;
 using ConviTEC.Inventario.Persistencia;
 
@@ -35,5 +36,11 @@ Console.WriteLine(
     $"Catálogo replicado: {catalogo.ConsultarOfertas().Length} oferta(s), "
     + $"{catalogo.SedesPendientes().Length} sede(s) sin primera instantánea.");
 
-ServidorSede.Crear(arranque.Inventario, configuracion.Url).Run();
+// Comandos de stock que llegan por RabbitMQ a inventario.<sede>. RF03 registrará aquí sus manejadores de catalogo.*.
+DespachadorInventario despachador = new DespachadorInventario(configuracion.SedeId);
+despachador.Registrar(new ManejadorComandosStock(configuracion.SedeId, new ProveedorStock(arranque.Inventario)));
+OpcionesMensajeria mensajeria = new OpcionesMensajeria(
+    configuracion.SedeId, configuracion.SedesRemotas, configuracion.RabbitUri, despachador);
+
+ServidorSede.Crear(arranque.Inventario, configuracion.Url, mensajeria).Run();
 return 0;

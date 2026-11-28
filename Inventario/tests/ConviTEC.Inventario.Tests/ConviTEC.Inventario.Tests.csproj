@@ -17,6 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\ConviTEC.Inventario\ConviTEC.Inventario.csproj" />
     <ProjectReference Include="..\..\src\ConviTEC.Inventario.Api\ConviTEC.Inventario.Api.csproj" />
+    <ProjectReference Include="..\..\src\ConviTEC.Inventario.Rabbit\ConviTEC.Inventario.Rabbit.csproj" />
   </ItemGroup>
 
   <ItemGroup>
