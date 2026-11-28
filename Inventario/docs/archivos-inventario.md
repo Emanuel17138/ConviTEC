@@ -75,3 +75,7 @@ Las pruebas simulan los dos cortes con un punto de interrupción interno de `Rep
 ## Consulta local reutilizable
 
 `InventarioLocal` ofrece `ConsultarInventario()` (todo el stock por `productoId` ascendente, agotados incluidos, `[]` si no hay productos), `BuscarStock(productoId, out stock)`, `Contiene`, `Cantidad`, `BuscarRevision`, `BuscarLote`, `BuscarComando`, `BuscarReposicion` y `ConsultarSalidasPendientes()`. RF02 reutiliza esta misma instancia; el endpoint HTTP la proyecta a JSON (ver [consulta-http.md](consulta-http.md)). La reposición (`ServicioReposiciones`) usa `Aplicar` para registrar la clave junto con el efecto (ver [reposicion-http.md](reposicion-http.md)).
+
+## Lotes de reserva
+
+Las transiciones de `stock.reservar`, `stock.confirmar` y `stock.liberar` sobre estos lotes y comandos están en [lotes-reserva.md](lotes-reserva.md).
