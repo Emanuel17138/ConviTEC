@@ -24,6 +24,10 @@ public interface IIndiceOrdenado<TClave, TValor>
     /// Devuelve false y no modifica nada si la clave no existe. Lanza <see cref="System.ArgumentNullException"/> si es nula.
     bool Reemplazar(TClave clave, TValor valor);
 
+    /// Quita la clave y su valor. Devuelve false y no modifica nada si la clave no existe.
+    /// Lanza <see cref="System.ArgumentNullException"/> si la clave es nula.
+    bool Eliminar(TClave clave);
+
     ///Claves en orden ascendente. Arreglo de longitud 0 si el índice está vacío.
     TClave[] ClavesEnOrden();
 

@@ -64,7 +64,7 @@ Una petición nueva usa su `mensajeId` como `correlacionId`. Un reintento reutil
 
 ## Cómo suma RF03
 
-`rf03-sincronizacion` crea un `IManejadorMensaje` con los tipos `catalogo.actualizado`, `catalogo.solicitar` y `catalogo.instantanea` y lo registra en `Program.cs` con `despachador.Registrar(...)`. No toca el consumidor ni el despachador. Hasta entonces esos tipos se descartan con un aviso.
+`ManejadorMensajesCatalogo` es un `IManejadorMensaje` con los tipos `catalogo.actualizado`, `catalogo.solicitar` y `catalogo.instantanea`, registrado en `Program.cs` con `despachador.Registrar(...)`. No toca el consumidor ni el despachador. La instantánea que responde a una solicitud sale como cualquier otra salida del despacho: el consumidor la publica en `inventario.<origen>` y después acusa. El envío de los cambios y la solicitud de instantáneas los hace `SincronizadorCatalogo`, que corre dentro de `ServicioMensajeria` sobre el mismo `PublicadorRabbit`. Ver [sincronizacion-catalogo.md](sincronizacion-catalogo.md).
 
 ## Configuración y ejecución
 
@@ -82,4 +82,6 @@ Instalar Erlang/OTP y RabbitMQ Server, y activar el panel de administración: `r
 ## Pruebas
 
 - Sin broker: `CodificadorSobreTests`, `DespachadorInventarioTests`, `ManejadorComandosStockTests`, `ClienteInventarioTests`, `IdentificadorDerivadoTests`.
+- Sin broker, catálogo: `CuerpoCatalogoTests`, `ManejadorMensajesCatalogoTests`, `SincronizadorCatalogoTests` y `RetiroSalidasTests`.
+- Con RabbitMQ real, catálogo: `RabbitCatalogoTests` (ver [sincronizacion-catalogo.md](sincronizacion-catalogo.md)).
 - Con RabbitMQ real: `RabbitDosSedesTests`. Usan `amqp://guest:guest@localhost:5672/` o la URI de `CONVITEC_RABBITMQ_TEST`. Cada prueba crea sedes con prefijo único (`T<hex>-LIB`, `T<hex>-SJ`) y borra sus colas. Cubren: reservar y confirmar entre dos sedes, liberar, dos reservas simultáneas de 4 contra 5, liberación anticipada, reintento del mismo sobre, reinicio entre el descuento y el acuse, comando enviado con la sede apagada, mensaje ilegible, publicación sin cola y conexión inalcanzable.

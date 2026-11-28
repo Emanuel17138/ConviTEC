@@ -165,4 +165,135 @@ public abstract class IndiceOrdenadoContratoTests
             Assert.True(indice.Contiene(claves[i]));
         }
     }
+
+    [Theory]
+    [InlineData("ARR")]            // hoja
+    [InlineData("CAF")]            // raíz con dos hijos
+    [InlineData("SAL")]            // hoja
+    public void Eliminar_ClaveExistente_LaQuitaYConservaElOrdenDeLasDemas(string clave)
+    {
+        IIndiceOrdenado<string, int> indice = CrearIndice();
+        InsertarTodos(indice, "CAF", "ARR", "SAL");
+
+        Assert.True(indice.Eliminar(clave));
+
+        Assert.False(indice.Contiene(clave));
+        Assert.Equal(2, indice.Cantidad);
+        string[] esperadas = clave == "ARR" ? new[] { "CAF", "SAL" }
+            : clave == "CAF" ? new[] { "ARR", "SAL" } : new[] { "ARR", "CAF" };
+        Assert.Equal(esperadas, indice.ClavesEnOrden());
+    }
+
+    [Fact]
+    public void Eliminar_NodoConUnSoloHijo_LoReemplazaPorEseHijo()
+    {
+        IIndiceOrdenado<string, int> indice = CrearIndice();
+        InsertarTodos(indice, "B", "A", "D", "C"); // D tiene solo a C
+
+        Assert.True(indice.Eliminar("D"));
+
+        Assert.Equal(new[] { "A", "B", "C" }, indice.ClavesEnOrden());
+        Assert.True(indice.Buscar("C", out _));
+    }
+
+    [Fact]
+    public void Eliminar_ConservaElValorDeLasClavesQueQuedan()
+    {
+        IIndiceOrdenado<string, int> indice = CrearIndice();
+        indice.Insertar("CAF", 10);
+        indice.Insertar("ARR", 20);
+        indice.Insertar("SAL", 30);
+        indice.Insertar("MAT", 40);
+
+        Assert.True(indice.Eliminar("CAF"));
+
+        Assert.True(indice.Buscar("ARR", out int arr));
+        Assert.True(indice.Buscar("SAL", out int sal));
+        Assert.True(indice.Buscar("MAT", out int mat));
+        Assert.Equal(20, arr);
+        Assert.Equal(30, sal);
+        Assert.Equal(40, mat);
+    }
+
+    [Fact]
+    public void Eliminar_UnicaClave_DejaElIndiceVacioYPermiteVolverAInsertar()
+    {
+        IIndiceOrdenado<string, int> indice = CrearIndice();
+        indice.Insertar("CAF", 1);
+
+        Assert.True(indice.Eliminar("CAF"));
+
+        Assert.True(indice.EstaVacio);
+        Assert.Equal(0, indice.Cantidad);
+        Assert.Equal(0, indice.Altura);
+        Assert.Empty(indice.ClavesEnOrden());
+        Assert.True(indice.Insertar("CAF", 2));
+    }
+
+    [Fact]
+    public void Eliminar_ClaveInexistenteOIndiceVacio_DevuelveFalseSinCambios()
+    {
+        IIndiceOrdenado<string, int> indice = CrearIndice();
+        Assert.False(indice.Eliminar("CAF"));
+
+        InsertarTodos(indice, "CAF", "ARR");
+
+        Assert.False(indice.Eliminar("caf")); // distingue mayúsculas
+        Assert.False(indice.Eliminar("XYZ"));
+        Assert.Equal(new[] { "ARR", "CAF" }, indice.ClavesEnOrden());
+    }
+
+    [Fact]
+    public void Eliminar_DosVeces_LaSegundaDevuelveFalse()
+    {
+        IIndiceOrdenado<string, int> indice = CrearIndice();
+        InsertarTodos(indice, "CAF", "ARR");
+
+        Assert.True(indice.Eliminar("CAF"));
+        Assert.False(indice.Eliminar("CAF"));
+        Assert.Equal(1, indice.Cantidad);
+    }
+
+    [Fact]
+    public void Eliminar_ClaveNula_Lanza()
+    {
+        IIndiceOrdenado<string, int> indice = CrearIndice();
+
+        Assert.Throws<ArgumentNullException>(() => indice.Eliminar(null!));
+    }
+
+    [Fact]
+    public void Eliminar_LaMitadDeMilClavesAleatorias_DejaElRestoOrdenado()
+    {
+        IIndiceOrdenado<string, int> indice = CrearIndice();
+        string[] claves = GeneradorClaves.Barajadas(1000, semilla: 7);
+        for (int i = 0; i < claves.Length; i++)
+        {
+            indice.Insertar(claves[i], i);
+        }
+
+        string[] ordenadas = GeneradorClaves.EnOrden(1000);
+        string[] orden = GeneradorClaves.Barajadas(1000, semilla: 99);
+        for (int i = 0; i < 500; i++)
+        {
+            Assert.True(indice.Eliminar(orden[i]));
+        }
+
+        Assert.Equal(500, indice.Cantidad);
+        string[] restantes = indice.ClavesEnOrden();
+        Assert.Equal(500, restantes.Length);
+        for (int i = 1; i < restantes.Length; i++)
+        {
+            Assert.True(string.CompareOrdinal(restantes[i - 1], restantes[i]) < 0);
+        }
+        for (int i = 0; i < 1000; i++)
+        {
+            bool eliminada = false;
+            for (int j = 0; j < 500 && !eliminada; j++)
+            {
+                eliminada = orden[j] == ordenadas[i];
+            }
+            Assert.Equal(!eliminada, indice.Contiene(ordenadas[i]));
+        }
+    }
 }

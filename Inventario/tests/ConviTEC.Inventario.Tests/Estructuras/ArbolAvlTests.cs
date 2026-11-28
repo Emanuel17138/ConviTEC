@@ -104,4 +104,60 @@ public class ArbolAvlTests : IndiceOrdenadoContratoTests
     {
         Assert.Throws<ArgumentNullException>(() => new ArbolAvl<string, int>(null!));
     }
+
+    [Fact]
+    public void Eliminar_TrasInsertarEnOrden_MantieneElBalanceoEnCadaPaso()
+    {
+        ArbolAvl<string, int> arbol = CrearArbol();
+        string[] claves = GeneradorClaves.EnOrden(300);
+        for (int i = 0; i < claves.Length; i++)
+        {
+            arbol.Insertar(claves[i], i);
+        }
+
+        string[] orden = GeneradorClaves.Barajadas(300, semilla: 5);
+        for (int i = 0; i < orden.Length; i++)
+        {
+            Assert.True(arbol.Eliminar(orden[i]));
+            Assert.True(arbol.VerificarInvariantes(), $"Invariantes rotas tras quitar {orden[i]} (paso {i}).");
+        }
+
+        Assert.True(arbol.EstaVacio);
+    }
+
+    [Fact]
+    public void Eliminar_CasoQueExigeRotacion_RebalanceaElArbol()
+    {
+        ArbolAvl<string, int> arbol = CrearArbol();
+        string[] claves = { "D", "B", "F", "A", "C", "E", "G", "H" };
+        for (int i = 0; i < claves.Length; i++)
+        {
+            arbol.Insertar(claves[i], i);
+        }
+
+        // Quitar A desbalancea B hacia la derecha y obliga a rotar.
+        Assert.True(arbol.Eliminar("A"));
+        Assert.True(arbol.Eliminar("C"));
+
+        Assert.True(arbol.VerificarInvariantes());
+        Assert.Equal(new[] { "B", "D", "E", "F", "G", "H" }, arbol.ClavesEnOrden());
+        Assert.True(arbol.Altura <= 3);
+    }
+
+    [Fact]
+    public void Eliminar_AlternadoConInsertar_ConservaLasInvariantes()
+    {
+        ArbolAvl<string, int> arbol = CrearArbol();
+        string[] claves = GeneradorClaves.Barajadas(400, semilla: 11);
+        for (int i = 0; i < claves.Length; i++)
+        {
+            arbol.Insertar(claves[i], i);
+            if (i % 3 == 2)
+            {
+                Assert.True(arbol.Eliminar(claves[i - 1]));
+            }
+        }
+
+        Assert.True(arbol.VerificarInvariantes());
+    }
 }

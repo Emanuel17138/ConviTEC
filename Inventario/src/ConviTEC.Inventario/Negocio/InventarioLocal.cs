@@ -19,6 +19,10 @@ public sealed class InventarioLocal
 
     public string SedeId { get; }
 
+    /// Se dispara, ya fuera de la exclusión mutua y con el cambio durable, cuando un <see cref="Aplicar{T}"/> dejó
+    /// publicaciones pendientes nuevas. Despierta al sincronizador sin que tenga que sondear.
+    public event Action? SalidasRegistradas;
+
     internal InventarioLocal(string sedeId, EstadoInventario estado, RepositorioInventario repositorio, string[] sedesRemotas)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sedeId, nameof(sedeId));
@@ -143,6 +147,59 @@ public sealed class InventarioLocal
         }
     }
 
+    /// Retira las publicaciones ya entregadas al broker. Solo se quita una salida si sigue pendiente con el mismo
+    /// <see cref="SalidaPendiente.MensajeId"/>: si un cambio posterior la sustituyó por una más reciente, esa se conserva.
+    /// Guarda el snapshot completo sin ellas y solo después las quita de memoria; no sube revisiones. Si no hay nada
+    /// que retirar no escribe. Devuelve cuántas retiró.
+    public int RetirarSalidas(SalidaPendiente[] enviadas)
+    {
+        ArgumentNullException.ThrowIfNull(enviadas, nameof(enviadas));
+
+        lock (_cerrojo)
+        {
+            ArbolAvl<string, SalidaPendiente> aRetirar = EstadoInventario.NuevoIndice<SalidaPendiente>();
+            for (int i = 0; i < enviadas.Length; i++)
+            {
+                ArgumentNullException.ThrowIfNull(enviadas[i], nameof(enviadas));
+                if (_estado.Salidas.Buscar(enviadas[i].Clave, out SalidaPendiente? vigente)
+                    && string.Equals(vigente.MensajeId, enviadas[i].MensajeId, StringComparison.Ordinal))
+                {
+                    aRetirar.Insertar(vigente.Clave, vigente);
+                }
+            }
+            if (aRetirar.EstaVacio)
+            {
+                return 0;
+            }
+
+            SalidaPendiente[] vivas = _estado.Salidas.ValoresEnOrden();
+            SalidaPendiente[] restantes = new SalidaPendiente[vivas.Length - aRetirar.Cantidad];
+            int posicion = 0;
+            for (int i = 0; i < vivas.Length; i++)
+            {
+                if (!aRetirar.Contiene(vivas[i].Clave))
+                {
+                    restantes[posicion++] = vivas[i];
+                }
+            }
+
+            _repositorio.GuardarEstado(ConversionEstado.Construir(
+                SedeId,
+                _estado.Stock.ValoresEnOrden(),
+                _estado.Lotes.ValoresEnOrden(),
+                _estado.Comandos.ValoresEnOrden(),
+                _estado.Reposiciones.ValoresEnOrden(),
+                restantes));
+
+            string[] claves = aRetirar.ClavesEnOrden();
+            for (int i = 0; i < claves.Length; i++)
+            {
+                _estado.Salidas.Eliminar(claves[i]);
+            }
+            return claves.Length;
+        }
+    }
+
     /// <summary>
     /// Ejecuta <paramref name="operacion"/> sobre un cambio en preparación y lo hace durable.
     /// <list type="number">
@@ -158,10 +215,12 @@ public sealed class InventarioLocal
     {
         ArgumentNullException.ThrowIfNull(operacion, nameof(operacion));
 
+        T resultado;
+        bool hayNuevasSalidas = false;
         lock (_cerrojo)
         {
             CambioInventario cambio = new CambioInventario(_estado);
-            T resultado = operacion(cambio);
+            resultado = operacion(cambio);
             if (cambio.EstaVacio)
             {
                 return resultado;
@@ -183,8 +242,14 @@ public sealed class InventarioLocal
             FusionIndices.Instalar(_estado.Comandos, cambio.Comandos);
             FusionIndices.Instalar(_estado.Reposiciones, cambio.Reposiciones);
             FusionIndices.Instalar(_estado.Salidas, salidasNuevas);
-            return resultado;
+            hayNuevasSalidas = !salidasNuevas.EstaVacio;
         }
+
+        if (hayNuevasSalidas)
+        {
+            SalidasRegistradas?.Invoke();
+        }
+        return resultado;
     }
 
     /// Igual que <see cref="Aplicar{T}"/> para operaciones que no devuelven valor.
