@@ -22,6 +22,8 @@ El proyecto `src/ConviTEC.Inventario.Api` es el adaptador HTTP de la sede. No ti
 - La sede la determina la instancia: no hay parámetro de sede. Cada consulta lee el estado vivo de `InventarioLocal`, así que RF02 verá reflejados sus movimientos sin cambiar el endpoint.
 - Un fallo inesperado responde 500 con `{codigo:"ERROR_INTERNO",mensaje}`. No se filtran detalles internos (el detalle va al log).
 
+Las reposiciones (`POST /api/v1/inventario/{productoId}/reposiciones`) están en [reposicion-http.md](reposicion-http.md).
+
 ## Arranque de la sede
 
 ```powershell
